@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Trading Bot UI</title>
+  <link rel="stylesheet" href="/styles.css" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+  <header>
+    <h1>Trading Bot</h1>
+    <nav>
+      <button id="tab-backtest" class="active">Backtesting</button>
+      <button id="tab-live">Live</button>
+    </nav>
+  </header>
+
+  <main>
+    <section id="backtest" class="tab active">
+      <form id="backtest-form">
+        <div class="row">
+          <label>Símbolo</label>
+          <input type="text" name="symbol" placeholder="BTCUSDT o BTC-USD" required />
+          <label>Intervalo</label>
+          <select name="interval">
+            <option>1m</option>
+            <option>5m</option>
+            <option>15m</option>
+            <option>30m</option>
+            <option selected>1h</option>
+            <option>4h</option>
+            <option>1d</option>
+          </select>
+          <label>Fuente</label>
+          <select name="source">
+            <option value="binance">Binance</option>
+            <option value="yahoo" selected>Yahoo</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Inicio</label>
+          <input type="date" name="start" required />
+          <label>Fin</label>
+          <input type="date" name="end" required />
+        </div>
+        <div class="row">
+          <label>Estrategia</label>
+          <select name="strategy" id="strategy-select">
+            <option value="sma_crossover" selected>SMA Crossover</option>
+            <option value="bbands">Bollinger Bands</option>
+          </select>
+          <div id="params-sma" class="params">
+            <label>Fast</label>
+            <input type="number" name="fast" value="10" />
+            <label>Slow</label>
+            <input type="number" name="slow" value="30" />
+          </div>
+          <div id="params-bbands" class="params hidden">
+            <label>Window</label>
+            <input type="number" name="window" value="20" />
+            <label>Num Std</label>
+            <input type="number" step="0.1" name="num_std" value="2.0" />
+          </div>
+        </div>
+        <div class="row">
+          <label>Capital Inicial</label>
+          <input type="number" name="initial_capital" value="1000" />
+          <label>Fee</label>
+          <input type="number" step="0.0001" name="fee" value="0.001" />
+          <button type="submit">Ejecutar Backtest</button>
+        </div>
+      </form>
+
+      <div id="bt-metrics" class="metrics"></div>
+      <div class="chart-container">
+        <canvas id="equityChart"></canvas>
+      </div>
+    </section>
+
+    <section id="live" class="tab">
+      <form id="live-form">
+        <div class="row">
+          <label>Símbolo</label>
+          <input type="text" name="symbol" placeholder="BTCUSDT" required />
+          <label>Intervalo</label>
+          <select name="interval">
+            <option>1m</option>
+            <option>5m</option>
+            <option>15m</option>
+            <option>30m</option>
+            <option selected>1h</option>
+            <option>4h</option>
+            <option>1d</option>
+          </select>
+          <label>Fuente</label>
+          <select name="source">
+            <option value="binance">Binance</option>
+            <option value="yahoo" selected>Yahoo</option>
+          </select>
+        </div>
+        <div class="row">
+          <label>Estrategia</label>
+          <select name="strategy" id="live-strategy-select">
+            <option value="sma_crossover" selected>SMA Crossover</option>
+            <option value="bbands">Bollinger Bands</option>
+          </select>
+          <div id="live-params-sma" class="params">
+            <label>Fast</label>
+            <input type="number" name="fast" value="10" />
+            <label>Slow</label>
+            <input type="number" name="slow" value="30" />
+          </div>
+          <div id="live-params-bbands" class="params hidden">
+            <label>Window</label>
+            <input type="number" name="window" value="20" />
+            <label>Num Std</label>
+            <input type="number" step="0.1" name="num_std" value="2.0" />
+          </div>
+        </div>
+        <div class="row">
+          <label>Días de lookback</label>
+          <input type="number" name="lookback_days" value="14" />
+          <label>Testnet</label>
+          <input type="checkbox" name="testnet" />
+          <label>Quote Qty</label>
+          <input type="number" step="0.0001" name="quote_qty" placeholder="Opcional (ejecuta orden)" />
+        </div>
+        <div class="row">
+          <button type="button" id="btn-signal">Obtener Señal</button>
+          <button type="button" id="btn-order">Ejecutar Orden</button>
+        </div>
+      </form>
+      <pre id="live-output" class="output"></pre>
+    </section>
+  </main>
+
+  <footer>
+    <small>Nota: Live trading requiere API Keys configuradas en el servidor. Usa testnet para pruebas.</small>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
