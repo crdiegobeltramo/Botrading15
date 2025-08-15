@@ -2,12 +2,17 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Dict, Any
 
+import os
+import base64
+import hmac
+
 import numpy as np
 import pandas as pd
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+from starlette.responses import PlainTextResponse
 
 from trading_bot.data import fetch_klines
 from trading_bot.backtester import backtest, summarize_trades
@@ -71,6 +76,28 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Basic Auth middleware (protects API and static files)
+_BASIC_USER = os.getenv("BASIC_AUTH_USER")
+_BASIC_PASS = os.getenv("BASIC_AUTH_PASS")
+
+@app.middleware("http")
+async def basic_auth(request: Request, call_next):
+    if not _BASIC_USER or not _BASIC_PASS:
+        return await call_next(request)
+    auth = request.headers.get("authorization")
+    ok = False
+    if auth and auth.startswith("Basic "):
+        try:
+            decoded = base64.b64decode(auth.split(" ", 1)[1]).decode("utf-8")
+            user, pw = decoded.split(":", 1)
+            if hmac.compare_digest(user, _BASIC_USER) and hmac.compare_digest(pw, _BASIC_PASS):
+                ok = True
+        except Exception:
+            ok = False
+    if not ok:
+        return PlainTextResponse("Authentication required", status_code=401, headers={"WWW-Authenticate": "Basic realm=\"TradingBot\""})
+    return await call_next(request)
 
 # Serve static UI
 app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
@@ -137,7 +164,6 @@ def api_live_signal(req: LiveSignalRequest):
 @app.post("/api/live/order")
 def api_live_order(req: LiveOrderRequest):
     try:
-        # Compute latest signal from chosen source & interval
         end = pd.Timestamp.utcnow()
         start = end - pd.Timedelta(days=req.lookback_days)
         df = fetch_klines(req.symbol, req.interval, start, end, source=req.source)
@@ -150,7 +176,6 @@ def api_live_order(req: LiveOrderRequest):
         position = strat.generate_position(df)
         latest_pos = int(position.iloc[-1])
 
-        # Place order via Binance
         config = load_binance_config(testnet=req.testnet)
         trader = LiveTrader(config=config, symbol=req.symbol, testnet=req.testnet)
         order = trader.run_once_from_signal(latest_position=latest_pos, quote_qty=req.quote_qty)
