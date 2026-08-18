@@ -2,12 +2,16 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Dict, Any
 
+import logging
+import os
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
+
+logger = logging.getLogger("trading_bot.api")
 
 from trading_bot.data import fetch_klines
 from trading_bot.backtester import backtest, summarize_trades
@@ -67,14 +71,10 @@ app = FastAPI(title="Trading Bot UI API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,  # Security: Credentials must not be allowed with wildcard origins
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
-
 
 @app.get("/api/strategies")
 def get_strategies():
@@ -111,8 +111,11 @@ def api_backtest(req: BacktestRequest):
             "close": dataframe_to_series_payload(df["close"]),
         }
         return payload
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in backtest execution: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Error occurred while processing backtest")
 
 
 @app.post("/api/live/signal")
@@ -130,8 +133,11 @@ def api_live_signal(req: LiveSignalRequest):
         position = strat.generate_position(df)
         latest_pos = int(position.iloc[-1])
         return {"latest_position": latest_pos}
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in live signal generation: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Error occurred while computing signal")
 
 
 @app.post("/api/live/order")
@@ -155,5 +161,13 @@ def api_live_order(req: LiveOrderRequest):
         trader = LiveTrader(config=config, symbol=req.symbol, testnet=req.testnet)
         order = trader.run_once_from_signal(latest_position=latest_pos, quote_qty=req.quote_qty)
         return {"latest_position": latest_pos, "order": order}
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error(f"Error in live order execution: {e}", exc_info=True)
+        raise HTTPException(status_code=400, detail="Error occurred while executing live order")
+
+
+# Serve static UI (mounted last so API routes take precedence)
+WEB_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
