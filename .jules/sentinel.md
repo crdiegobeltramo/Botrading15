@@ -1,0 +1,4 @@
+## 2025-05-20 - Catch-All Static Mount Order & Exception Sanitization
+**Vulnerability:** FastApi `app.mount("/", StaticFiles(...))` mounted before API routes shadowed all `/api/*` endpoints and converted requests to 404/405 static file responses. Unhandled exceptions in endpoints returned unhandled internal stack details.
+**Learning:** Mounting static files at `/` in FastAPI creates a fallback router that captures all subpaths if placed before API endpoint declarations. Additionally, returning unhandled exception strings directly to users can leak internal implementation details or secrets.
+**Prevention:** Always mount static file handlers at `/` *after* declaring all explicit API routes, and ensure unexpected exceptions are logged internally while returning standardized error messages to clients.
