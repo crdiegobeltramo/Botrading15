@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Literal, Optional, Dict, Any
 
 import numpy as np
@@ -67,13 +68,18 @@ app = FastAPI(title="Trading Bot UI API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
-# Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
+
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    return response
 
 
 @app.get("/api/strategies")
@@ -157,3 +163,9 @@ def api_live_order(req: LiveOrderRequest):
         return {"latest_position": latest_pos, "order": order}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# Serve static UI (mounted after API routes)
+web_dir = os.path.join(os.path.dirname(__file__), "web")
+if os.path.exists(web_dir):
+    app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
