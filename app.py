@@ -4,6 +4,9 @@ from typing import Literal, Optional, Dict, Any
 
 import numpy as np
 import pandas as pd
+import logging
+import os
+
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -72,8 +75,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+logger = logging.getLogger("trading_bot")
+
 # Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
+web_dir = os.path.join(os.path.dirname(__file__), "web")
+if os.path.exists(web_dir):
+    app.mount("/static", StaticFiles(directory=web_dir, html=True), name="web")
 
 
 @app.get("/api/strategies")
@@ -111,8 +118,12 @@ def api_backtest(req: BacktestRequest):
             "close": dataframe_to_series_payload(df["close"]),
         }
         return payload
-    except Exception as e:
+    except ValueError as e:
+        logger.warning(f"Backtest input error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error during backtest execution", exc_info=True)
+        raise HTTPException(status_code=400, detail="Operation failed")
 
 
 @app.post("/api/live/signal")
@@ -130,8 +141,12 @@ def api_live_signal(req: LiveSignalRequest):
         position = strat.generate_position(df)
         latest_pos = int(position.iloc[-1])
         return {"latest_position": latest_pos}
-    except Exception as e:
+    except ValueError as e:
+        logger.warning(f"Live signal input error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error generating live signal", exc_info=True)
+        raise HTTPException(status_code=400, detail="Operation failed")
 
 
 @app.post("/api/live/order")
@@ -155,5 +170,9 @@ def api_live_order(req: LiveOrderRequest):
         trader = LiveTrader(config=config, symbol=req.symbol, testnet=req.testnet)
         order = trader.run_once_from_signal(latest_position=latest_pos, quote_qty=req.quote_qty)
         return {"latest_position": latest_pos, "order": order}
-    except Exception as e:
+    except ValueError as e:
+        logger.warning(f"Live order input error: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.error("Error executing live order", exc_info=True)
+        raise HTTPException(status_code=400, detail="Operation failed")
