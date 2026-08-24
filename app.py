@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Literal, Optional, Dict, Any
 
 import numpy as np
@@ -64,17 +65,14 @@ def dataframe_to_series_payload(series: pd.Series) -> Dict[str, Any]:
 
 app = FastAPI(title="Trading Bot UI API")
 
+# Restrict CORS credentials when using wildcard origins to prevent cross-origin credential exposure
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-# Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
-
 
 @app.get("/api/strategies")
 def get_strategies():
@@ -157,3 +155,7 @@ def api_live_order(req: LiveOrderRequest):
         return {"latest_position": latest_pos, "order": order}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+# Serve static UI relative to application directory (mounted after API routes)
+WEB_DIR = os.path.join(os.path.dirname(__file__), "web")
+app.mount("/", StaticFiles(directory=WEB_DIR, html=True), name="web")
