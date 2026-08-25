@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from typing import Literal, Optional, Dict, Any
 
 import numpy as np
@@ -14,6 +16,9 @@ from trading_bot.backtester import backtest, summarize_trades
 from trading_bot.strategies import STRATEGY_REGISTRY
 from trading_bot.execution.live_trader import LiveTrader
 from trading_bot.config import load_binance_config
+
+logger = logging.getLogger("trading_bot")
+BASE_DIR = Path(__file__).parent
 
 
 class BacktestRequest(BaseModel):
@@ -72,10 +77,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
-
-
 @app.get("/api/strategies")
 def get_strategies():
     return {
@@ -112,7 +113,8 @@ def api_backtest(req: BacktestRequest):
         }
         return payload
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Error performing backtest: %s", e, exc_info=True)
+        raise HTTPException(status_code=400, detail="An error occurred while processing the backtest request")
 
 
 @app.post("/api/live/signal")
@@ -131,7 +133,8 @@ def api_live_signal(req: LiveSignalRequest):
         latest_pos = int(position.iloc[-1])
         return {"latest_position": latest_pos}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Error generating live signal: %s", e, exc_info=True)
+        raise HTTPException(status_code=400, detail="An error occurred while fetching live signals")
 
 
 @app.post("/api/live/order")
@@ -156,4 +159,9 @@ def api_live_order(req: LiveOrderRequest):
         order = trader.run_once_from_signal(latest_position=latest_pos, quote_qty=req.quote_qty)
         return {"latest_position": latest_pos, "order": order}
     except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        logger.error("Error executing live order: %s", e, exc_info=True)
+        raise HTTPException(status_code=400, detail="An error occurred while placing live order")
+
+
+# Serve static UI after API routes so API paths take precedence
+app.mount("/", StaticFiles(directory=str(BASE_DIR / "web"), html=True), name="web")
