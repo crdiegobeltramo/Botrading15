@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+from pathlib import Path
 from typing import Literal, Optional, Dict, Any
 
 import numpy as np
@@ -7,6 +9,8 @@ import pandas as pd
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+
+logger = logging.getLogger("trading_bot")
 from pydantic import BaseModel, Field
 
 from trading_bot.data import fetch_klines
@@ -64,17 +68,14 @@ def dataframe_to_series_payload(series: pd.Series) -> Dict[str, Any]:
 
 app = FastAPI(title="Trading Bot UI API")
 
+# Hardened CORS configuration: disallow credentials when allowing wildcard origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
+    allow_credentials=False,
+    allow_methods=["GET", "POST"],
     allow_headers=["*"],
 )
-
-# Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
-
 
 @app.get("/api/strategies")
 def get_strategies():
@@ -111,8 +112,11 @@ def api_backtest(req: BacktestRequest):
             "close": dataframe_to_series_payload(df["close"]),
         }
         return payload
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Error processing backtest")
+        raise HTTPException(status_code=500, detail="An error occurred processing the request")
 
 
 @app.post("/api/live/signal")
@@ -130,8 +134,11 @@ def api_live_signal(req: LiveSignalRequest):
         position = strat.generate_position(df)
         latest_pos = int(position.iloc[-1])
         return {"latest_position": latest_pos}
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Error processing live signal")
+        raise HTTPException(status_code=500, detail="An error occurred processing the request")
 
 
 @app.post("/api/live/order")
@@ -155,5 +162,14 @@ def api_live_order(req: LiveOrderRequest):
         trader = LiveTrader(config=config, symbol=req.symbol, testnet=req.testnet)
         order = trader.run_once_from_signal(latest_position=latest_pos, quote_qty=req.quote_qty)
         return {"latest_position": latest_pos, "order": order}
-    except Exception as e:
+    except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        logger.exception("Error processing live order")
+        raise HTTPException(status_code=500, detail="An error occurred processing the request")
+
+
+# Serve static UI relative to current file path (mounted after API routes)
+web_dir = Path(__file__).parent / "web"
+if web_dir.exists():
+    app.mount("/", StaticFiles(directory=str(web_dir), html=True), name="web")
