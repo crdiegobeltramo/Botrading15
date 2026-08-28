@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Literal, Optional, Dict, Any
 
+import os
 import numpy as np
 import pandas as pd
 from fastapi import FastAPI, HTTPException
@@ -64,16 +65,19 @@ def dataframe_to_series_payload(series: pd.Series) -> Dict[str, Any]:
 
 app = FastAPI(title="Trading Bot UI API")
 
+# Security: Wildcard origins ("*") combined with allow_credentials=True is insecure
+# and forbidden by CORS specifications to prevent cross-origin credential exposure.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
+web_dir = os.path.join(os.path.dirname(__file__), "web")
+app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
 
 
 @app.get("/api/strategies")
