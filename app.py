@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 from typing import Literal, Optional, Dict, Any
 
 import numpy as np
@@ -64,16 +65,21 @@ def dataframe_to_series_payload(series: pd.Series) -> Dict[str, Any]:
 
 app = FastAPI(title="Trading Bot UI API")
 
+allowed_origins_env = os.getenv("ALLOWED_ORIGINS")
+allowed_origins = [o.strip() for o in allowed_origins_env.split(",") if o.strip()] if allowed_origins_env else ["http://localhost:8000", "http://127.0.0.1:8000"]
+
+# Security enhancement: Avoid overly permissive CORS configuration with wildcard origins and allow_credentials=True
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allowed_origins,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "OPTIONS"],
     allow_headers=["*"],
 )
 
 # Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
+web_dir = os.getenv("WEB_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "web"))
+app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
 
 
 @app.get("/api/strategies")
