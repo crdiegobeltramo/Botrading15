@@ -17,31 +17,31 @@ from trading_bot.config import load_binance_config
 
 
 class BacktestRequest(BaseModel):
-    symbol: str
-    interval: str
+    symbol: str = Field(..., pattern=r"^[A-Za-z0-9\-=^./]{1,20}$")
+    interval: str = Field(..., pattern=r"^[0-9]{1,3}[mhdwM]$")
     start: str
     end: str
     strategy: Literal["sma_crossover", "bbands"]
     source: Literal["binance", "yahoo"] = "binance"
-    initial_capital: float = 1000.0
-    fee: float = 0.001
+    initial_capital: float = Field(1000.0, gt=0)
+    fee: float = Field(0.001, ge=0)
     # Strategy params
-    fast: Optional[int] = 10
-    slow: Optional[int] = 30
-    window: Optional[int] = 20
-    num_std: Optional[float] = 2.0
+    fast: Optional[int] = Field(10, gt=0)
+    slow: Optional[int] = Field(30, gt=0)
+    window: Optional[int] = Field(20, gt=0)
+    num_std: Optional[float] = Field(2.0, gt=0)
 
 
 class LiveSignalRequest(BaseModel):
-    symbol: str
-    interval: str
+    symbol: str = Field(..., pattern=r"^[A-Za-z0-9\-=^./]{1,20}$")
+    interval: str = Field(..., pattern=r"^[0-9]{1,3}[mhdwM]$")
     strategy: Literal["sma_crossover", "bbands"]
     source: Literal["binance", "yahoo"] = "binance"
-    lookback_days: int = 14
-    fast: Optional[int] = 10
-    slow: Optional[int] = 30
-    window: Optional[int] = 20
-    num_std: Optional[float] = 2.0
+    lookback_days: int = Field(14, ge=1, le=365)
+    fast: Optional[int] = Field(10, gt=0)
+    slow: Optional[int] = Field(30, gt=0)
+    window: Optional[int] = Field(20, gt=0)
+    num_std: Optional[float] = Field(2.0, gt=0)
 
 
 class LiveOrderRequest(LiveSignalRequest):
@@ -72,9 +72,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Serve static UI
-app.mount("/", StaticFiles(directory="/workspace/web", html=True), name="web")
-
+import os
 
 @app.get("/api/strategies")
 def get_strategies():
@@ -157,3 +155,9 @@ def api_live_order(req: LiveOrderRequest):
         return {"latest_position": latest_pos, "order": order}
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
+
+
+# Serve static UI (mounted after routes so API endpoints take priority)
+web_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "web")
+if os.path.exists(web_dir):
+    app.mount("/", StaticFiles(directory=web_dir, html=True), name="web")
